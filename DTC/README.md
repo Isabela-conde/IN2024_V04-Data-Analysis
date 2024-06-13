@@ -29,3 +29,10 @@ The code produces NetCDF files that contain datetime stamps, latitude, longitude
 #### Usage
 
 To use this code, simply run the `process_ctd_dtc.ipynb` notebook in a Python environment where the required libraries are installed. The notebook will automatically load the data, process it, and save the output to NetCDF files.
+
+
+## Map salinity, temperature, oxygen on to bathymetry.
+- working on
+
+
+## Plot Salinity, temperature and habitat type
