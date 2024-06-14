@@ -108,6 +108,9 @@ def plot_adcp_data(Cdata_interpolated, valid_casts, bathy_path, indices, colors)
     bathy_data = xr.open_dataset(bathy_path)
     bathy_data['Band1'].plot()
 
+    lons = []
+    lats = []
+
     for cast in Cdata_interpolated.keys():
         for ind, color in zip(indices, colors):
             if ind >= len(Cdata_interpolated[cast]) or np.isnan(Cdata_interpolated[cast].u_int[ind]):
@@ -117,16 +120,25 @@ def plot_adcp_data(Cdata_interpolated, valid_casts, bathy_path, indices, colors)
             lat = valid_casts[cast]['lat']
             lon = valid_casts[cast]['lon']
             plt.quiver(lon, lat, u, v, scale=5, color=color)
+            lons.append(lon)
+            lats.append(lat)
 
         # Plot the bottom-most valid measurement
         last_valid_index = Cdata_interpolated[cast]['p_int'][~np.isnan(Cdata_interpolated[cast]['u_int'])].index[-1]
         u_bottom = Cdata_interpolated[cast].u_int[last_valid_index]
         v_bottom = Cdata_interpolated[cast].v_int[last_valid_index]
         plt.quiver(lon, lat, u_bottom, v_bottom, scale=5, color='black', label='Bottom-most Measurement')
+        lons.append(lon)
+        lats.append(lat)
 
     plt.xlabel('Longitude')
     plt.ylabel('Latitude')
     plt.legend([f'Index {i}' for i in indices] + ['Bottom-most Measurement'], loc='upper right')  # Added loc parameter for legend
+
+    # Set x and y limits to fit all quivers
+    plt.xlim(min(lons) - 0.2, max(lons) + 0.2)
+    plt.ylim(min(lats) - 0.2, max(lats) + 0.2)
+    
     plt.show()
 
 
