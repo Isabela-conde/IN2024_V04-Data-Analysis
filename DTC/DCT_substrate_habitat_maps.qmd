@@ -1,0 +1,114 @@
+## Code for mapping the substrate and habitat
+- only with tow 3 line 19 (I'm creating a function that will hopefully then run this for all tows)
+
+set working directory
+
+```{r}
+setwd("ur/working/directory")
+```
+
+load packages: 
+```{r}
+library(rayshader)
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+library(raster)
+library(terra)
+library(ggplot2)
+library(ncdf4)
+library(sf)
+library(here)
+library(tidyr)
+library(viridis)
+library(readr)
+```
+
+
+import data: 
+```{r}
+
+# event measure csv
+INV2024_V04_03_19 <- read_csv("IN2024_VO4_003_19_10062024_sub.csv")
+
+# nc file of lat, long, depths and UTC time
+nc_file <- "INV/initial_data/DTC_IN2024_V04_003_20240610T170229Z_ALL.nc"
+
+nc <- nc_open(nc_file)
+
+lat <- ncvar_get(nc, "lat")
+lon <- ncvar_get(nc, "lon")
+depth <- ncvar_get(nc, "depth")
+utc_date <- ncvar_get(nc, "date")
+utc_time <- ncvar_get(nc, "hour")
+
+nc_close(nc)
+
+lat_long_03_19 <- data.frame(
+  longitude = as.vector(lon),
+  latitude = as.vector(lat),
+  depth = as.vector(depth), 
+  utc_time = as.vector(utc_time),
+  utc_date = as.vector(utc_date)
+)
+
+```
+
+getting UTC time for ev csv: 
+```{r}
+initial_time <- ymd_hms("2024-10-06 17:35:47", tz = "UTC")
+
+time_in_seconds <- INV2024_V04_03_19$`Time (mins)` * 60
+
+INV2024_V04_03_19 <- INV2024_V04_03_19 %>%
+  mutate(utc_time = initial_time + seconds(time_in_seconds)) %>%
+  mutate(utc_time = floor_date(utc_time, "minute"))
+
+```
+
+getting UTC time in the same format for joining with ev csv: 
+```{r}
+lat_long_03_19 <- lat_long_03_19 %>%
+  mutate(utc_time = mdy_hms(paste(utc_date, utc_time))) %>%
+  filter(utc_time < as_datetime("2024-10-06 19:13:00")) %>%
+  filter(utc_time > as_datetime("2024-10-06 17:34:59")) %>%
+  mutate(utc_time = as_datetime(utc_time)) %>%
+  mutate(utc_time = floor_date(utc_time, "second"))
+
+```
+
+joining: 
+```{r}
+joined_data <- full_join(lat_long_03_19, INV2024_V04_03_19, by = "utc_time")
+```
+
+
+interpolating substrate and habitat:
+```{r}
+joined_data <- joined_data %>%
+  arrange(utc_time) %>%
+  fill(HabitatAggFauna, SG, .direction = "down")
+```
+
+load bathymetry: 
+```{r}
+nc_file <- "Solitary_Island_Canyon_High_Res_Bathy.nc"
+
+bathymetry <- rast(nc_file)
+
+bathymetry_df <- as.data.frame(bathymetry, xy = TRUE)
+colnames(bathymetry_df) <- c("longitude", "latitude", "depth")
+```
+
+plot: 
+```{r}
+ggplot() +
+  geom_raster(data = bathymetry_df, aes(x = longitude, y = latitude, fill = depth)) +
+  scale_fill_viridis_c(option = "inferno", direction = 1, limits = c(-3150, -2000)) +
+  coord_fixed(xlim = c(153.74, 153.775), ylim = c(-30.130, -30.09)) +
+  geom_point(data = joined_data, aes(x = longitude, y = latitude, colour = HabitatAggFauna)) +
+  geom_contour(data = bathymetry_df, aes(x = longitude, y = latitude, z = depth),
+               bins = 50, color = "black") +
+  theme_bw()
+```
+
