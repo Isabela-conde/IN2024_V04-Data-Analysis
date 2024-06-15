@@ -4,7 +4,7 @@
 
 Megan: Plotting CTD transects across the canyon
 
-## YoYos: Analysining data from microstructures DAT009 - DAT018 
+## YoYos: Analysining data from microstructures DAT009 -> ...
 _Bela_
 Using micorider to look at the mixing coefficients chi and epsilon and see how they change with time and how this effects isotherms
 
