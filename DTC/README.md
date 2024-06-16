@@ -7,8 +7,7 @@
 - tomorrow's project!
 
 ## Plot substrate and habitat on bathymetry 
-- tow 3 line 19 is done (still got to fix a couple of errors)
-- currently making function for the rest
+- function for plotting substrate/habitat on bathymetry (example below!)
   ![plot](https://github.com/Isabela-conde/INV_V04-DTC_CTD-Analysis/assets/106574502/94493c98-faf8-42ce-b8dd-a949df34789d)
 
 
@@ -44,7 +43,7 @@ To use this code, simply run the `process_ctd_dtc.ipynb` notebook in a Python en
 
 ## DCT_substrate_habitat_maps.qmd
 Code to create substrate and habitat tow line maps, currently only a test with tow 3 line 19.
-- Working on making a function to plot all tow lines
+- contains function to plot all tow lines (just need csv and nc files and the start and end time off bottom)
 the test code runs on the following tow data:
 -   IN2024_V04_003
 
