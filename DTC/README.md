@@ -36,10 +36,6 @@ The code produces NetCDF files that contain datetime stamps, latitude, longitude
 - xarray
 - netCDF4
 
-#### Usage
-
-To use this code, simply run the `process_ctd_dtc.ipynb` notebook in a Python environment where the required libraries are installed. The notebook will automatically load the data, process it, and save the output to NetCDF files.
-
 
 ## DCT_substrate_habitat_maps.qmd
 Code to create substrate and habitat tow line maps, currently only a test with tow 3 line 19.
