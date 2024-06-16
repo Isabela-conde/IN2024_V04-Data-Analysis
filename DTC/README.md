@@ -4,7 +4,8 @@
 - working on
   
 ## Plot salinity, temperature and habitat type
-- tomorrow's project!
+<img width="1494" alt="Screenshot 2024-06-16 at 1 42 20 PM" src="https://github.com/Isabela-conde/IN2024_V04-Data-Analysis/assets/106574502/623643b2-d836-4183-a5e3-d3601d4ab725">
+
 
 ## Plot substrate and habitat on bathymetry 
 - function for plotting substrate/habitat on bathymetry (example below!)
