@@ -1,5 +1,10 @@
 # LADCP Analysis 
 
 
-### reg - processed data?
+Reg- processed data. 
+
+
+Some interesting code code Bec suggested:
+
+https://github.com/sebastianmenze/Processing-and-analysis-of-large-ADCP-datasets
 
