@@ -1,0 +1,287 @@
+## Code for mapping the substrate and habitat
+
+-   function for post DCT mapping of tows, substrate and habitat
+-   example of individual map
+
+set working directory
+
+```{r}
+setwd("ur/working/directory")
+```
+
+load packages:
+
+```{r}
+library(rayshader)
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+library(raster)
+library(terra)
+library(ggplot2)
+library(ncdf4)
+library(sf)
+library(here)
+library(tidyr)
+library(viridis)
+library(readr)
+```
+
+function for post DCT mapping:
+
+```{r}
+# function for getting the dataset in the correct format for plotting 
+process_and_assign_data <- function(csv_file, nc_file, initial_time_str, end_time_str, var_name) {
+  # read CSV
+  ev_data <- read_csv(csv_file)
+  
+  # open nc file and extract data
+  nc <- nc_open(nc_file)
+  lat <- ncvar_get(nc, "lat")
+  lon <- ncvar_get(nc, "lon")
+  depth <- ncvar_get(nc, "depth")
+  utc_date <- ncvar_get(nc, "date")
+  utc_time <- ncvar_get(nc, "hour")
+  temp <- ncvar_get(nc, "temperature")
+  oxygen <- ncvar_get(nc, "oxygen")
+  salinity <- ncvar_get(nc, "salinity")
+  nc_close(nc)
+  
+  # dataframe for nc
+  lat_long_data <- data.frame(
+    longitude = as.vector(lon),
+    latitude = as.vector(lat),
+    depth = as.vector(depth), 
+    utc_time = as.vector(utc_time),
+    utc_date = as.vector(utc_date), 
+    temp = as.vector(temp), 
+    oxygen = as.vector(oxygen), 
+    salinity = as.vector(salinity)
+  )
+  
+  # convert time str
+  initial_time <- ymd_hms(initial_time_str, tz = "UTC")
+  end_time <- ymd_hms(end_time_str, tz = "UTC")
+  
+  # calculate utc time for DCT
+  time_in_seconds <- ev_data$`Time (mins)` * 60
+  ev_data <- ev_data %>%
+    mutate(utc_time = initial_time + seconds(time_in_seconds)) %>%
+    mutate(utc_time = floor_date(utc_time, "second"))
+  
+  # convert and filter utc time
+  lat_long_data <- lat_long_data %>%
+    mutate(utc_time = dmy_hms(paste(utc_date, utc_time))) %>%
+    filter(utc_time < end_time) %>%
+    filter(utc_time > initial_time) %>%
+    mutate(utc_time = as_datetime(utc_time)) %>%
+    mutate(utc_time = floor_date(utc_time, "second"))
+  
+  # join data 
+  joined_data <- full_join(lat_long_data, ev_data, by = "utc_time")
+  
+  # interpolate substrate and habitat
+  joined_data <- joined_data %>%
+    arrange(utc_time) %>%
+    fill(HabitatAggFauna, SG, OpCode, .direction = "down")
+  
+  assign(var_name, joined_data, envir = .GlobalEnv)
+}
+
+# list files
+csv_files <- list("IN2024_V04/initial_data/INV2024_VO4_01_17_09062024_sub.csv",
+                  "IN2024_V04/initial_data/INV2024_V04_02_16_TM.csv",
+                  "IN2024_V04/initial_data/INV2024_VO4_03_19_10062024_sub.csv",
+                  "IN2024_V04/initial_data/INV2024_VO4_04_15_sub.csv",
+                  "IN2024_V04/initial_data/INV2024_V04_05_11_TM_sub.csv",
+                  "IN2024_V04/initial_data/INV2024_V04_09_14_TM_sub.csv",
+                  "IN2024_V04/initial_data/INV2024_V04_10_13_TM_sub.csv")
+nc_files <- list("IN2024_V04/initial_data/DTC_IN2024_V04_001_20240609T064927Z_ALL.nc",
+                 "IN2024_V04/initial_data/DTC_IN2024_V04_002_20240609T130743Z_ALL.nc",
+                 "IN2024_V04/initial_data/DTC_IN2024_V04_003_20240610T170229Z_ALL.nc",
+                 "IN2024_V04/initial_data/DTC_IN2024_V04_004_20240610T220841Z_ALL.nc",
+                 "IN2024_V04/initial_data/DTC_IN2024_V04_005_20240611T025208Z_ALL.nc", 
+                 "IN2024_V04/initial_data/DTC_IN2024_V04_009_20240614T133503Z_ALL.nc",
+                 "IN2024_V04/initial_data/DTC_IN2024_V04_010_20240614T180822Z_ALL.nc")
+initial_times <- list("2024-06-09 08:31:07", "2024-06-09 14:02:29", "2024-06-10 17:35:47", "2024-06-10 22:55:45",
+                      "2024-06-11 03:10:15", "2024-06-14 14:13:41", "2024-06-14 18:53:19")
+end_times <- list("2024-06-09 09:38:39", "2024-06-09 16:15:17", "2024-06-10 19:12:30", "2024-06-10 23:52:38",
+                  "2024-06-11 04:09:16", "2024-06-14 14:57:00", "2024-06-14 20:12:00" )
+
+for (i in 1:length(csv_files)) {
+  var_name <- paste0("joined_data_", sprintf("%02d", i))
+  process_and_assign_data(csv_files[[i]], nc_files[[i]], initial_times[[i]], end_times[[i]], var_name)
+}
+```
+
+joining:
+
+```{r}
+all_lines <- joined_data_01 %>% 
+  full_join(joined_data_02) %>% 
+  full_join(joined_data_03) %>% 
+  full_join(joined_data_04) %>% 
+  full_join(joined_data_05)
+```
+
+plotting as facet_wrap:
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# set bathy limits
+limits_list <- list(
+  "INV2024_VO4_01_17" = list(xmin = 153.70, xmax = 153.74, ymin = -30.117, ymax = -30.07),
+  "INV2024_V04_02_16" = list(xmin = 153.676, xmax = 153.701, ymin = -30.095, ymax = -30.065),
+  "INV2024_V04_03_19" = list(xmin = 153.73, xmax = 153.785, ymin = -30.14, ymax = -30.07),
+  "INV2024_V04_04_15" = list(xmin = 153.67, xmax = 153.695, ymin = -30.09, ymax = -30.055),
+  "INV2024_V04_05_11" = list(xmin = 153.60, xmax = 153.63, ymin = -30.044, ymax = -30.006),
+  "IN2024_V04_09_14" = list(xmin = 153.632, xmax = 153.65, ymin = -30.063, ymax = -30.055),
+  "INV2024_V04_10_13" = list(xmin = 153.586, xmax = 153.616, ymin = -30.06, ymax = -30.04)
+)
+
+#function to filter bathy
+filter_bathymetry <- function(data, op_code) {
+  limits <- limits_list[[op_code]]
+  data %>%
+    filter(longitude >= limits$xmin, longitude <= limits$xmax,
+           latitude >= limits$ymin, latitude <= limits$ymax)
+}
+
+# filter bathy_for each OpCode
+bathymetry_df_list <- lapply(names(limits_list), function(op_code) {
+  filtered_bathymetry <- filter_bathymetry(bathymetry_df, op_code)
+  filtered_bathymetry$OpCode <- op_code
+  return(filtered_bathymetry)
+})
+
+# combine bathy data
+bathymetry_df_filtered <- bind_rows(bathymetry_df_list)
+
+# Combine data 
+all_lines <- joined_data_01 %>%
+  full_join(joined_data_02) %>% 
+  full_join(joined_data_03) %>% 
+  full_join(joined_data_04) %>% 
+  full_join(joined_data_05) %>% 
+  full_join(joined_data_06) %>% 
+  full_join(joined_data_07)
+
+# plot with given limits
+ggplot() +
+  geom_raster(data = bathymetry_df_filtered, aes(x = longitude, y = latitude, fill = depth)) +
+  scale_fill_viridis_c(option = "inferno", direction = 1) +
+  geom_contour(data = bathymetry_df_filtered, aes(x = longitude, y = latitude, z = depth), bins = 25, color =
+                 "black") +
+  geom_point(data = all_lines, aes(x = longitude, y = latitude, colour = SG)) +
+  theme_bw() +
+  facet_wrap(~OpCode, scales = "free") +
+  coord_cartesian()  
+
+```
+
+Overall map:
+
+```{r}
+ggplot() +
+  geom_raster(data = bathymetry_df, aes(x = longitude, y = latitude, fill = depth)) +
+  scale_fill_viridis_c(option = "inferno", direction = 1) +
+    coord_fixed(xlim = c(153.59, 153.8), ylim = c(-30.17, -30.0)) +
+  geom_contour(data = bathymetry_df, aes(x = longitude, y = latitude, z = depth), bins = 25, color = "black") +
+  geom_point(data = all_lines, aes(x = longitude, y = latitude, colour = OpCode)) + #change colour according to what you want to plot
+  theme_bw() 
+```
+
+example of just one plot import data:
+
+```{r}
+
+# event measure csv
+INV2024_V04_03_19 <- read_csv("IN2024_V04/initial_data/INV2024_VO4_03_19_10062024_sub.csv")
+
+# nc file of lat, long, depths and UTC time
+nc_file <- "IN2024_V04/initial_data/DTC_IN2024_V04_003_20240610T170229Z_ALL.nc"
+
+nc <- nc_open(nc_file)
+print(nc)
+lat <- ncvar_get(nc, "lat")
+lon <- ncvar_get(nc, "lon")
+depth <- ncvar_get(nc, "depth")
+utc_date <- ncvar_get(nc, "date")
+utc_time <- ncvar_get(nc, "hour")
+
+nc_close(nc)
+
+lat_long_03_19 <- data.frame(
+  longitude = as.vector(lon),
+  latitude = as.vector(lat),
+  depth = as.vector(depth), 
+  utc_time = as.vector(utc_time),
+  utc_date = as.vector(utc_date)
+)
+
+```
+
+getting UTC time for ev csv:
+
+```{r}
+initial_time <- ymd_hms("2024-06-10 17:35:47", tz = "UTC")
+
+time_in_seconds <- INV2024_V04_03_19$`Time (mins)` * 60
+
+INV2024_V04_03_19 <- INV2024_V04_03_19 %>%
+  mutate(utc_time = initial_time + seconds(time_in_seconds)) %>%
+  mutate(utc_time = floor_date(utc_time, "minute"))
+
+```
+
+getting UTC time in the same format for joining with ev csv:
+
+```{r}
+lat_long_03_19 <- lat_long_03_19 %>%
+  mutate(utc_time = dmy_hms(paste(utc_date, utc_time))) %>%
+  filter(utc_time < as_datetime("2024-06-09 19:12:30")) %>%
+  filter(utc_time > as_datetime("2024-06-10 17:35:47")) %>%
+  mutate(utc_time = floor_date(utc_time, "second"))
+
+```
+
+joining:
+
+```{r}
+joined_data <- full_join(lat_long_03_19, INV2024_V04_03_19, by = "utc_time")
+```
+
+interpolating substrate and habitat:
+
+```{r}
+joined_data <- joined_data %>%
+  arrange(utc_time) %>%
+  fill(HabitatAggFauna, SG, .direction = "down")
+```
+
+load bathymetry:
+
+```{r}
+nc_file <- "Solitary_Island_Canyon_High_Res_Bathy.nc"
+
+bathymetry <- rast(nc_file)
+
+bathymetry_df <- as.data.frame(bathymetry, xy = TRUE)
+colnames(bathymetry_df) <- c("longitude", "latitude", "depth")
+```
+
+plot:
+
+```{r}
+ggplot() +
+  geom_raster(data = bathymetry_df, aes(x = longitude, y = latitude, fill = depth)) +
+  scale_fill_viridis_c(option = "inferno", direction = 1, limits = c(-3150, -2000)) +
+  coord_fixed(xlim = c(153.632, 153.65), ylim = c(-30.063, -30.055)) +
+  geom_point(data = joined_data, aes(x = longitude, y = latitude, colour = HabitatAggFauna)) +
+  geom_contour(data = bathymetry_df, aes(x = longitude, y = latitude, z = depth),
+               bins = 50, color = "black") +
+  theme_bw()
+
+```
