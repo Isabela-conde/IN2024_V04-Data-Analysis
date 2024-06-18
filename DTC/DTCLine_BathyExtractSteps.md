@@ -28,5 +28,7 @@ https://gis.stackexchange.com/questions/3538/extracting-raster-values-at-points-
 7) Export the new attribute table - either as a csv or a txt file (what ever fomrat you wish to read into R).
 You can also just copy paste the table from Arc as a shortcut
 
-R Code 
+R Code - Presently written for oneline (02_16_tow_line)
+
+
 
