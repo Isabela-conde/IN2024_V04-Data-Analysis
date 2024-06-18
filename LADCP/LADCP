@@ -1,0 +1,479 @@
+# %%
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.io as sio
+import os
+import xarray as xr
+import pandas as pd
+from scipy.interpolate import griddata
+
+def get_adcp_data(cast):
+    """
+    Load ADCP data from a MAT file for a given cast number.
+    
+    Parameters:
+    cast (int): The cast number to load.
+    
+    Returns:
+    dict: The extracted data from the MAT file.
+    """
+    file = f'{cast:03d}.mat'
+    pathF = os.path.join('.', 'processed', file)
+    mat_data = sio.loadmat(pathF, simplify_cells=True)
+    return mat_data['dr']
+
+def get_valid_casts(castset,last_cast):
+    """
+    Retrieve valid ADCP casts data.
+    
+    Parameters:
+    last_cast (int): The last cast number to check.
+    
+    Returns:
+    dict: A dictionary with valid casts data.
+    """
+
+    if castset == 'all':
+
+        valid_casts = {}
+        for cast in range(1, last_cast + 1):
+            try:
+                dr = get_adcp_data(cast)
+                if dr['lon'] != 0 and cast != 1:
+                    valid_casts[f'Cast{cast:03d}'] = dr
+            except (FileNotFoundError, KeyError):
+                print(f'') # Print invalid Casts if you like
+        return valid_casts
+
+    else:
+
+        valid_casts = {}
+        for cast in castset:
+            try:
+                dr = get_adcp_data(cast)
+                if dr['lon'] != 0 and cast != 1:
+                    valid_casts[f'Cast{cast:03d}'] = dr
+            except (FileNotFoundError, KeyError):
+                print(f'') # Print invalid Casts if you like
+        return valid_casts
+
+
+def process_casts(valid_casts):
+    """
+    Process the valid casts into interpolated DataFrames.
+    
+    Parameters:
+    valid_casts (dict): The valid casts data.
+    
+    Returns:
+    dict: A dictionary of interpolated DataFrames for each cast.
+    """
+    Cdata = {}
+    for cast, data in valid_casts.items():
+        df_data = {
+            'z': data['z'],
+            'u': data['u'],
+            'v': data['v']
+        }
+        Cdata[cast] = pd.DataFrame(df_data)
+
+    big_dep = []
+    # max depth is 4408m
+    Cdata_interpolated = {}
+    full_depth_range = np.arange(0, 4410, 2)  # Define the full depth range
+    for cast, df in Cdata.items():
+        z = df['z']
+        u = df['u']
+        v = df['v']
+
+        # Find the maximum depth with valid u and v measurements
+        max_depth = max(z)
+        big_dep.append(max_depth)
+
+        # Define the interpolation depths, only up to the max_depth
+        interpolated_z = np.arange(2, max_depth + 1, 2)
+        interpolated_u = np.interp(interpolated_z, z, u, left=np.nan, right=np.nan)
+        interpolated_v = np.interp(interpolated_z, z, v, left=np.nan, right=np.nan)
+
+        # Extend the interpolated arrays to the full depth range with NaNs beyond max_depth
+        u_extended = np.full_like(full_depth_range, np.nan, dtype=np.float64)
+        v_extended = np.full_like(full_depth_range, np.nan, dtype=np.float64)
+
+        u_extended[:len(interpolated_u)] = interpolated_u
+        v_extended[:len(interpolated_v)] = interpolated_v
+
+        data = {
+            'z_int': full_depth_range,
+            'u_int': u_extended,
+            'v_int': v_extended
+        }
+        Cdata_interpolated[cast] = pd.DataFrame(data)
+
+    print(str(max(big_dep))+'m is the lowest depth measurement')
+    return Cdata_interpolated
+
+def plot_adcp_data(Cdata_interpolated, valid_casts, bathy_path, indices, colors):
+    """
+    Plot ADCP data on a bathymetry map.
+    
+    Parameters:
+    Cdata_interpolated (dict): The interpolated ADCP data.
+    valid_casts (dict): The valid casts data.
+    bathy_path (str): Path to the bathymetry data.
+    indices (list): Indices for plotting.
+    colors (list): Colors for plotting.
+    """
+    plt.figure(figsize=(14, 10))  # Set the figure size
+    bathy_data = xr.open_dataset(bathy_path)
+    bathy_data['Band1'].plot()
+
+    lons = []
+    lats = []
+
+    for cast in Cdata_interpolated.keys():
+        lat = valid_casts[cast]['lat']
+        lon = valid_casts[cast]['lon']
+
+        for ind, color in zip(indices, colors):
+            
+            z = Cdata_interpolated[cast].z_int
+            z_ind = z[z==ind].index[0]
+
+            if ind >= len(Cdata_interpolated[cast]) or not np.isnan(Cdata_interpolated[cast].u_int[z_ind]):
+                
+                u = Cdata_interpolated[cast].u_int[z_ind]
+                v = Cdata_interpolated[cast].v_int[z_ind]
+
+                plt.quiver(lon, lat, u, v, scale=5, color=color)
+                lons.append(lon)
+                lats.append(lat)
+
+        # Plot the bottom-most valid measurement
+        last_valid_index = Cdata_interpolated[cast]['z_int'][~np.isnan(Cdata_interpolated[cast]['u_int'])].index[-1]
+        u_bottom = Cdata_interpolated[cast].u_int[last_valid_index]
+        v_bottom = Cdata_interpolated[cast].v_int[last_valid_index]
+        # plt.quiver(lon, lat, u_bottom, v_bottom, scale=5, color='black', label='Bottom-most Measurement')
+        # plt.text(lon,lat,str(int(cast[4:])))
+        lons.append(lon)
+        lats.append(lat)
+
+    plt.xlabel('Longitude')
+    plt.ylabel('Latitude')
+    plt.legend([f'Index {i}' for i in indices] + ['Bottom-most Measurement'], loc='upper right')  # Added loc parameter for legend
+
+    # Set x and y limits to fit all quivers
+    plt.xlim(min(lons) - 0.2, max(lons) + 0.2)
+    plt.ylim(min(lats) - 0.2, max(lats) + 0.2)
+    
+    plt.show()
+
+def find_vortex_center(lon, lat, u, v):
+    """
+    Function to find the center of rotation (vortex center) from given lon, lat, u, v data.
+
+    Parameters:
+    - lon: Array of longitudes of points (in degrees).
+    - lat: Array of latitudes of points (in degrees).
+    - u: Array of eastward velocity components at each point.
+    - v: Array of northward velocity components at each point.
+
+    Returns:
+    - vortex_center_lon: Longitude of the vortex center (in degrees).
+    - vortex_center_lat: Latitude of the vortex center (in degrees).
+    """
+    # Convert latitudes and longitudes to radians
+    lon_rad = np.radians(lon)
+    lat_rad = np.radians(lat)
+    
+    # Convert velocity components to Cartesian coordinates
+    u_cartesian = u * np.cos(lat_rad)
+    v_cartesian = v
+    
+    # Calculate the circulation vector components
+    Cx = np.sum(u_cartesian)
+    Cy = np.sum(v_cartesian)
+    
+    # Calculate the centroid (center of rotation) in Cartesian coordinates
+    centroid_x = np.sum(lon_rad * v_cartesian) / Cy
+    centroid_y = np.sum(lat_rad * v_cartesian) / Cy
+    
+    # Convert centroid back to longitude and latitude
+    vortex_center_lon = np.degrees(centroid_x)
+    vortex_center_lat = np.degrees(centroid_y)
+    
+    return vortex_center_lon, vortex_center_lat
+
+def plot_cross_sections(valid_casts):
+    # Extract data from casts
+    lats = []
+    lons = []
+    depths = []
+    us = []
+    vs = []
+    ps = []
+
+    for cast_key, cast_data in valid_casts.items():
+        lat = cast_data['lat']
+        lon = cast_data['lon']
+        z = cast_data['z']
+        u = cast_data['u']
+        v = cast_data['v']
+        p = cast_data['p']
+        
+        lats.extend([lat] * len(z))
+        lons.extend([lon] * len(z))
+        depths.extend(z)
+        us.extend(u)
+        vs.extend(v)
+        ps.extend(p)
+
+    # Convert lists to numpy arrays
+    lats = np.array(lats)
+    lons = np.array(lons)
+    depths = np.array(depths)
+    us = np.array(us)
+    vs = np.array(vs)
+    ps = np.array(ps)
+
+    # Define grid for interpolation
+    grid_lon = np.linspace(min(lons), max(lons), 100)
+    grid_lat = np.linspace(min(lats), max(lats), 100)
+    grid_depth = np.linspace(min(depths), max(depths), 100)
+    grid_lon, grid_depth_zonal = np.meshgrid(grid_lon, grid_depth)
+    grid_lat, grid_depth_meridional = np.meshgrid(grid_lat, grid_depth)
+
+    # Interpolate u, v, and p to the grids
+    grid_u_zonal = griddata((lons, depths), us, (grid_lon, grid_depth_zonal), method='linear')
+    grid_v_zonal = griddata((lons, depths), vs, (grid_lon, grid_depth_zonal), method='linear')
+    grid_p_zonal = griddata((lons, depths), ps, (grid_lon, grid_depth_zonal), method='linear')
+
+    grid_u_meridional = griddata((lats, depths), us, (grid_lat, grid_depth_meridional), method='linear')
+    grid_v_meridional = griddata((lats, depths), vs, (grid_lat, grid_depth_meridional), method='linear')
+    grid_p_meridional = griddata((lats, depths), ps, (grid_lat, grid_depth_meridional), method='linear')
+
+    # Plotting the contour plots
+    fig, axs = plt.subplots(3, 2, figsize=(20, 15), sharex='col')
+
+    # Zonal (u) contour plot
+    pcm1 = axs[0, 0].pcolormesh(grid_lon, grid_depth_zonal, grid_u_zonal, cmap='RdBu_r', shading='auto')
+    axs[0, 0].invert_yaxis()
+    axs[0, 0].set_title('u Zonal Cross-Section')
+    axs[0, 0].set_ylabel('Depth (m)')
+    fig.colorbar(pcm1, ax=axs[0, 0], label='u')
+    pcm1.set_clim([-0.5, 0.5])  # Set color limits
+
+    # Zonal (v) contour plot
+    pcm2 = axs[1, 0].pcolormesh(grid_lon, grid_depth_zonal, grid_v_zonal, cmap='RdBu_r', shading='auto')
+    axs[1, 0].invert_yaxis()
+    axs[1, 0].set_title('v Zonal Cross-Section')
+    axs[1, 0].set_ylabel('Depth (m)')
+    fig.colorbar(pcm2, ax=axs[1, 0], label='v')
+    pcm2.set_clim([-1, 1])  # Set color limits
+
+    # Zonal (p) contour plot
+    pcm3 = axs[2, 0].pcolormesh(grid_lon, grid_depth_zonal, grid_p_zonal, cmap='viridis', shading='auto')
+    axs[2, 0].invert_yaxis()
+    axs[2, 0].set_title('p Zonal Cross-Section')
+    axs[2, 0].set_xlabel('Longitude')
+    axs[2, 0].set_ylabel('Depth (m)')
+    fig.colorbar(pcm3, ax=axs[2, 0], label='p')
+
+    # Meridional (u) contour plot
+    pcm4 = axs[0, 1].pcolormesh(grid_lat, grid_depth_meridional, grid_u_meridional, cmap='RdBu_r', shading='auto')
+    axs[0, 1].invert_yaxis()
+    axs[0, 1].set_title('u Meridional Cross-Section')
+    axs[0, 1].set_ylabel('Depth (m)')
+    fig.colorbar(pcm4, ax=axs[0, 1], label='u')
+    pcm4.set_clim([-0.5, 0.5])  # Set color limits
+
+    # Meridional (v) contour plot
+    pcm5 = axs[1, 1].pcolormesh(grid_lat, grid_depth_meridional, grid_v_meridional, cmap='RdBu_r', shading='auto')
+    axs[1, 1].invert_yaxis()
+    axs[1, 1].set_title('v Meridional Cross-Section')
+    axs[1, 1].set_ylabel('Depth (m)')
+    fig.colorbar(pcm5, ax=axs[1, 1], label='v')
+    pcm5.set_clim([-1, 1])  # Set color limits
+
+    # Meridional (p) contour plot
+    pcm6 = axs[2, 1].pcolormesh(grid_lat, grid_depth_meridional, grid_p_meridional, cmap='viridis', shading='auto')
+    axs[2, 1].invert_yaxis()
+    axs[2, 1].set_title('p Meridional Cross-Section')
+    axs[2, 1].set_xlabel('Latitude')
+    axs[2, 1].set_ylabel('Depth (m)')
+    fig.colorbar(pcm6, ax=axs[2, 1], label='p')
+
+    plt.tight_layout()
+    plt.show()
+def plot_cross_sections_simple(valid_casts):
+    # Extract data from casts
+    lats = []
+    lons = []
+    depths = []
+    us = []
+    vs = []
+    ps = []
+
+    for cast_key, cast_data in valid_casts.items():
+        lat = cast_data['lat']
+        lon = cast_data['lon']
+        z = cast_data['z']
+        u = cast_data['u']
+        v = cast_data['v']
+        p = cast_data['p']
+        
+        lats.extend([lat] * len(z))
+        lons.extend([lon] * len(z))
+        depths.extend(z)
+        us.extend(u)
+        vs.extend(v)
+        ps.extend(p)
+
+    # Convert lists to numpy arrays
+    lats = np.array(lats)
+    lons = np.array(lons)
+    depths = np.array(depths)
+    us = np.array(us)
+    vs = np.array(vs)
+    ps = np.array(ps)
+
+    # Define grid for interpolation
+    grid_lon = np.linspace(min(lons), max(lons), 100)
+    grid_lat = np.linspace(min(lats), max(lats), 100)
+    grid_depth = np.linspace(min(depths), max(depths), 100)
+    grid_lon, grid_depth_zonal = np.meshgrid(grid_lon, grid_depth)
+    grid_lat, grid_depth_meridional = np.meshgrid(grid_lat, grid_depth)
+
+    # Interpolate u, v, and p to the grids
+    grid_u_zonal = griddata((lons, depths), us, (grid_lon, grid_depth_zonal), method='linear')
+    grid_v_zonal = griddata((lons, depths), vs, (grid_lon, grid_depth_zonal), method='linear')
+    grid_p_zonal = griddata((lons, depths), ps, (grid_lon, grid_depth_zonal), method='linear')
+
+    grid_u_meridional = griddata((lats, depths), us, (grid_lat, grid_depth_meridional), method='linear')
+    grid_v_meridional = griddata((lats, depths), vs, (grid_lat, grid_depth_meridional), method='linear')
+    grid_p_meridional = griddata((lats, depths), ps, (grid_lat, grid_depth_meridional), method='linear')
+
+    # Plotting the contour plots
+    fig, axs = plt.subplots(1, 2, figsize=(25, 10))
+
+    # Zonal (v) contour plot
+    pcm1 = axs[0].pcolormesh(grid_lon, grid_depth_zonal, grid_v_zonal, cmap='RdBu_r', shading='auto')
+    axs[0].scatter(lons,depths,color='k')
+    axs[0].invert_yaxis()
+    axs[0].set_title('v Zonal Cross-Section')
+    axs[0].set_ylabel('Depth (m)')
+    axs[0].set_xlabel('Longitude')
+    fig.colorbar(pcm1, ax=axs[0], label='v')
+    pcm1.set_clim([-.5, .5])  # Set color limits
+
+    # Meridional (u) contour plot
+    pcm2 = axs[1].pcolormesh(grid_lat, grid_depth_meridional, grid_u_meridional, cmap='RdBu_r', shading='auto')
+    axs[1].scatter(lats,depths,color='k')
+    axs[1].invert_yaxis()
+    axs[1].set_title('u Meridional Cross-Section')
+    axs[1].set_ylabel('Depth (m)')
+    axs[1].set_xlabel('Latitude')
+    fig.colorbar(pcm2, ax=axs[1], label='u')
+    pcm2.set_clim([-.5, .5])  # Set color limits
+
+    plt.tight_layout()
+    plt.show()
+
+# %% [markdown]
+# # Load Data
+
+# %%
+# Change directory to the location of your data files
+os.chdir('/Volumes/current/adcp/ladcp/processing')
+
+
+castline1 = [27,29,28]
+
+castline2 = [31,30,32,33]
+
+castline3 = [9,8,25,24,26,22,23,10,19,21,17,20,18,11,16,15,14]
+
+castline4 = [2,3,4,6]
+
+valid_casts = get_valid_casts('all',33)
+
+# Process casts data
+Cdata_interpolated = process_casts(valid_casts)
+
+# %% [markdown]
+# # Plot
+
+# %%
+# Load bathymetry data
+bathy_path = '/Users/regdowse/Desktop/ADCP/Solitary_Island_Canyon_High_Res_Bathy.nc'
+bathy_data = xr.open_dataset(bathy_path)
+# Plot bathymetry data
+plt.figure(figsize=(14, 10)) 
+bathy_data['Band1'].plot()
+# Define jitter amount
+jitter_amount = 0.01  # Adjust this value as needed
+# Add jittered text annotations
+for cast in valid_casts:
+    lon_jitter = np.random.uniform(-jitter_amount, jitter_amount)
+    lat_jitter = np.random.uniform(-jitter_amount, jitter_amount)
+    plt.text(valid_casts[cast]['lon'] + lon_jitter, valid_casts[cast]['lat'] + lat_jitter, int(cast[4:]), color='r')
+# Set plot limits
+plt.xlim([153.55, 153.9])
+plt.ylim([-30.3, -29.95])
+# Show the plot
+plt.show()
+    
+
+# %%
+# depths (m)
+indices=[3000,3200,3500]
+colors=['red', 'blue', 'green']
+
+plot_adcp_data(Cdata_interpolated, valid_casts, bathy_path, indices, colors)
+
+# %%
+plot_cross_sections_simple(valid_casts)
+
+# %%
+valid_casts['Cast004']['u']
+
+# %%
+Cdata_interpolated['Cast004']
+
+# %%
+lon = []
+lat = []
+u = []
+v = []
+
+p = 1000
+
+for cast in Cdata_interpolated.keys():
+    lon.append(valid_casts[cast]['lon'])
+    lat.append(valid_casts[cast]['lat'])
+
+    u.append(Cdata_interpolated[cast].u_int[p/2-1])
+    v.append(Cdata_interpolated[cast].v_int[p/2-1])
+
+plt.figure(figsize=(14, 10)) 
+
+center = find_vortex_center(lon, lat, u, v)
+
+plt.quiver(lon,lat,u,v)
+plt.scatter(center[0],center[1])
+plt.axis('equal')
+# plt.xlim([153.6,153.7])
+# plt.ylim([-30.4,-30])
+
+# %%
+
+
+# %%
+
+
+# %%
+
+
+# %%
+
+
+
