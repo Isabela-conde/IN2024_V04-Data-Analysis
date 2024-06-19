@@ -23,9 +23,18 @@ This will have added the bathy depth into the attributes
 For QGIS you should be able to use the Point Sampling Tool plug in or code in request to bind attribute data
 https://gis.stackexchange.com/questions/3538/extracting-raster-values-at-points-using-open-source-gis
 
-7) Export the new attribute table - either as a csv or a txt file (what ever fomrat you wish to read into R).
-You can also just copy paste the table from Arc as a shortcut
+7) To get slope (if it is of interest) use "Extract Values to Points" using on a slope rather than the bathy layer
 
-R Code - Soon to be uploaded
+8) Export the new attribute table - either as a csv or a txt file (what ever fomrat you wish to read into R).
+You can also just copy paste the table from Arc as a shortcut
+Double the lines match up. Arc does not read in any N/A data, so check if there are any in the intial dataset
+
+# R Code -
+Run the DTC_over_Bathy R code included within this DTC channel
+This will produce 3 things:
+1) a series of plots showing the depth of the camera over the depth of the seafloor (from the bathy) and the difefrence between the two
+2) a series of plots showing the slope of the seafloor across a tow
+3) a table which averages the difference between the camera depth and the seafloor of each tow
+
 
 
