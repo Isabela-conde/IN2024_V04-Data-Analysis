@@ -6,6 +6,8 @@ Megan: Plotting CTD transects across the canyon
 
 ## YoYos: Analysining data from microrider 
 _Bela_
+
+
 Using micorider to look at the mixing coefficients chi and epsilon and see how they change with time and how this effects isotherms.
 
 Paper produced with the same instrument and method:
