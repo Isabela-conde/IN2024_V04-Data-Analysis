@@ -23,9 +23,9 @@ https://agupubs.onlinelibrary.wiley.com/doi/pdfdirect/10.1029/2023JC019932
 
 ### 1. Process .P files to .nc files 
 
-process_pickle.m automatically runs proccessing matlab code for case n=1,2,3 and 12.
+process_pickle.m automatically runs proccessing matlab code compute_AFP07_dissapation.m for case n=1,2,3 and 11,12.
 
-Authors of code compute_AFP07_dissapatino.m wrote the following article which expalins variable and method: 
+Authors of code compute_AFP07_dissapation.m wrote the following article which expalins variables and method: 
 Comparison of Turbulence Intensity from CTD-Attached and Free-Fall Microstructure Profilers
 (Goto, 2017)
 
@@ -55,6 +55,7 @@ Pulls out rejection criteria from file and plots points that are omitted as well
 - log10 SNR
 - W
 - S std
+- with rejected criteria
 
   Requires MATLAB
 
