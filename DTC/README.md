@@ -1,8 +1,6 @@
 # DTC-Analysis - Current projects
 
-## Map salinity, temperature, oxygen on to bathymetry.
-- working on
-  
+## Plotting camera path at floor bottom with salinity, temperature, habitat and bio stuff (??)   
 ## Plot salinity, temperature and habitat type
 <img width="1494" alt="Screenshot 2024-06-16 at 1 42 20 PM" src="https://github.com/Isabela-conde/IN2024_V04-Data-Analysis/assets/106574502/623643b2-d836-4183-a5e3-d3601d4ab725">
 
@@ -14,13 +12,7 @@
 
 ## process_dtc.ipynb
 Code to process and analyse CSV files from Conductivity, Temperature, Depth along with DTC lat,lon and indexed by time.
-The code collates data from DTC and CTD sources, specifically from the following tests:
-
-- IN2024_V04_001
-- IN2024_V04_002
-- IN2024_V04_003
-- IN2024_V04_004
-- IN2024_V04_005
+The code collates data from DTC and CTD sources, in the format - IN2024_V04_xxx.csv. Steve needs to first process the csv files. 
 
 The data for these tests are located in the '/Volumes/Science-Team/DTC_CTD_CSV' directory.
 
