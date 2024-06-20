@@ -1,7 +1,12 @@
 # DTC-Analysis - Current projects
 
-## Plotting camera path at floor bottom with salinity, temperature, habitat and bio stuff (??)   
-## Plot salinity, temperature and habitat type
+## Plotting camera path at floor bottom with salinity, temperature, habitat and benthic fauna  
+- got fauna so far (today's task is salinity and temperature)
+<img width="1502" alt="Screenshot 2024-06-19 at 4 58 52 AM" src="https://github.com/Isabela-conde/IN2024_V04-Data-Analysis/assets/106574502/660ef190-d817-4be3-add0-24289fc43a0d">
+
+
+## Plot salinity, temperature of DTC across canyon
+- this will be updated (the scale is changing + adding two lines for each DTC)
 <img width="1494" alt="Screenshot 2024-06-16 at 1 42 20 PM" src="https://github.com/Isabela-conde/IN2024_V04-Data-Analysis/assets/106574502/623643b2-d836-4183-a5e3-d3601d4ab725">
 
 
@@ -30,10 +35,10 @@ The code produces NetCDF files that contain datetime stamps, latitude, longitude
 - netCDF4
 
 
-## DCT_substrate_habitat_maps.qmd
-Code to create substrate and habitat tow line maps, currently only a test with tow 3 line 19.
+## DTC_substrate_habitat_maps.qmd
+Code to create substrate and habitat tow line maps.
 - contains function to plot all tow lines (just need csv and nc files and the start and end time off bottom)
-the test code runs on the following tow data:
+  currently runs on all the Solitary DTC:
 -   IN2024_V04_003
 
 The nc files for this is located in the '/data/Science-Team/DTC_CTD_CSV' directory
