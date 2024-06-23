@@ -7,7 +7,6 @@ Megan: Plotting CTD transects across the canyon
 ## YoYos: Analysining data from microrider 
 _Bela_
 
-
 Using micorider to look at the mixing coefficients chi and epsilon and see how they change with time and how this effects isotherms.
 
 Paper produced with the same instrument and method:
@@ -21,6 +20,13 @@ Turbulent Diffusivity Profiles on the Shelf and Slope at the
 Southern Edge of the Canada Basin.
 (Yee, 2024)
 https://agupubs.onlinelibrary.wiley.com/doi/pdfdirect/10.1029/2023JC019932
+
+Observational evidence of diapycnal upwelling
+within a sloping submarine canyon (2024) 
+Paper in review https://assets-eu.researchsquare.com/files/rs-3459062/v1_covered_7c31f1ac-ba9a-40c2-8f74-65d3ea19cded.pdf?c=1697771522
+
+Internal Tides in Monterey Submarine Canyon (2011)
+https://journals.ametsoc.org/configurable/content/journals$002fphoc$002f41$002f1$002f2010jpo4471.1.xml?t:ac=journals%24002fphoc%24002f41%24002f1%24002f2010jpo4471.1.xml&tab_body=abstract-display
 
 
 ### 1. Process .P files to .nc files 

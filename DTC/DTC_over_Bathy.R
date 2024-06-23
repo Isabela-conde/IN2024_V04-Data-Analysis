@@ -3,14 +3,16 @@
 
 #Set work director and read in data sets
 setwd("S:/BathyData/Solitary_Canyon") # this wd will only work aboard the Investigator
+#setwd("S:/BathyData/Richmond_Canyon") #Un-hash when working on Richmond
 data = read.csv("solitary_DTC.csv")
+#data = read.csv("richmond_DTC_arcdata_added.csv") #Unhash when working on Richmond
 
 #Identifying number of tows within the dataset
 P= unique(data$TowLine)
 OpCode = unique(data$OpCode)
 
 #Calcaulating the difference in the camera above the seafloor
-data$diff = data$depth-data$bathydepth
+data$diff = data$depth-(as.numeric(data$bathydepth))
 
 #Loop to plot each camera tow - DTC camera depth vs bathy depth and difference
 for(i in seq_along(P)){
@@ -111,16 +113,17 @@ colnames(DTC) = c('OpCode','Mean_Diff','Median_Diff','Sd_Diff') #naming top row
 
 #Loop stats calc for each camera tow
 for (i in unique(data$OpCode)){
-  DTC[DTC$OpCode==i,2]=mean(data[data$OpCode==i,"diff"])
-  DTC[DTC$OpCode==i,3]=median(data[data$OpCode==i,"diff"])
-  DTC[DTC$OpCode==i,4]=sd(data[data$OpCode==i,"diff"])
+  DTC[DTC$OpCode==i,2]=mean(data[data$OpCode==i,"diff"], na.rm=TRUE)
+  DTC[DTC$OpCode==i,3]=median(data[data$OpCode==i,"diff"], na.rm=TRUE)
+  DTC[DTC$OpCode==i,4]=sd(data[data$OpCode==i,"diff"], na.rm=TRUE)
 }
 
 #Finding the mean, median and standrd dev of all the data
-meanAll=mean(data$diff)
-medianAll=median(data$diff)
-sdAll=sd(data$diff)
+meanAll=mean(data$diff, na.rm=TRUE)
+medianAll=median(data$diff, na.rm=TRUE)
+sdAll=sd(data$diff, na.rm=TRUE)
 
 #Appending the totals on to the end of the data frame
 totals=c("All Data",meanAll,medianAll,sdAll)
 DTC_DifferenceStats=rbind(DTC,totals)
+

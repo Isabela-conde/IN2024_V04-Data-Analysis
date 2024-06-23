@@ -8,7 +8,7 @@ Next steps taken using ArcPro - should be possible in QGIS. Should also be possi
 
 2) Load most up to date bathy file in WGS-1984
 Solitary = (S:\BathyData\Solitary_Canyon\15_June\in2024_v04_EM122_SA_20m_UTM56S_240615.tif)
-Richmond =  (S:\BathyData\Richmond_Canyon\Richmond_2018_50m.tif)
+Richmond =  (S:\BathyData\Richmond_Canyon\Richmond\in2024_v04_EM122_SA_20m_UTM56S_240622.tif)
 
 3) Load csv or txt file of the DTC line into GIS - will load in as a table
 
