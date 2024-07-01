@@ -10,9 +10,9 @@ Feel free to add more folders and update the READMEs as you go.
 
 - may need to be updated
   
-![ops_solitary](https://github.com/Isabela-conde/IN2024_V04-Data-Analysis/assets/160552485/12339ed6-5d6f-4572-bde6-ea3ef8bee6f2)
 
+![ops_solitary](https://github.com/Isabela-conde/IN2024_V04-Data-Analysis/assets/160552485/dd5043d1-f842-446a-ac93-358a6cf4e0d6)
 
 
 ## Operations in Richmond Canyon
-![ops_richmond](https://github.com/Isabela-conde/IN2024_V04-Data-Analysis/assets/160552485/d26003a2-0ff7-4f4a-bb66-969c54f2f28c)
+![ops_richmond](https://github.com/Isabela-conde/IN2024_V04-Data-Analysis/assets/160552485/0b1a1d7a-fc51-4dc2-b10c-51dec079a2b9)
