@@ -1,4 +1,4 @@
-![ops_solitary](https://github.com/Isabela-conde/IN2024_V04-Data-Analysis/assets/160552485/e35c63c7-c646-42e8-8a56-30a016288e52)# IN2024_V04-DTC_CTD-Analysis
+# IN2024_V04-DTC_CTD-Analysis
 Repository for RV investigator INV04, includes code for processing and analysing CTD and DTC output.
 
 This repo includes two folders 1. code for CTD analysis and 2. code for DTC analysis, each folder will include a README.md file. Feel free to drop any code here, but please add a description to the README file. 
