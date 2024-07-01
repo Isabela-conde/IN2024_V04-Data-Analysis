@@ -10,8 +10,8 @@ Feel free to add more folders and update the READMEs as you go.
 
 - may need to be updated
   
+![Uploading ops_solitary.png…]()
 
-![ops_solitary](https://github.com/Isabela-conde/IN2024_V04-Data-Analysis/assets/160552485/dd5043d1-f842-446a-ac93-358a6cf4e0d6)
 
 
 ## Operations in Richmond Canyon
