@@ -1,0 +1,382 @@
+# All code from substrate and habitat data from DTC (during voyage)
+
+-   function for joining DTC with oceanographic DTC data
+-   plot of DTC tows on Solitary and Richmond canyon
+-   function for extracting bathymetry depth of tows (R version of Alysha's ArcPro GIS work)
+-   plot of substrate and habitat across tow lines
+-   plot temp and salinity across a tow line
+-   3D plot of temp and salinity across 3 specific tows
+
+set working directory
+
+```{r}
+setwd("/Users/your/working/directory") 
+```
+
+load packages:
+
+```{r}
+library(rayshader) 
+library(lubridate) 
+library(ggplot2) 
+library(dplyr) 
+library(raster) 
+library(terra) 
+library(ncdf4) 
+library(sf) 
+library(tidyr) 
+library(viridis) 
+library(readr) 
+library(geosphere) 
+library(ggnewscale) 
+```
+
+## Function to join DTC with oceanographic DTC data, lat/long and depth
+
+```{r}
+process_and_assign_data <- function(csv_file, nc_file, initial_time_str, end_time_str, var_name) {
+  # read CSV of event measure data
+  em_data <- read_csv(csv_file)
+  
+  # open nc file and extract data
+  nc <- nc_open(nc_file)
+  lat <- ncvar_get(nc, "lat")
+  lon <- ncvar_get(nc, "lon")
+  depth <- ncvar_get(nc, "depth")
+  utc_date <- ncvar_get(nc, "date")
+  utc_time <- ncvar_get(nc, "hour")
+  temp <- ncvar_get(nc, "temperature")
+  oxygen <- ncvar_get(nc, "oxygen")
+  salinity <- ncvar_get(nc, "salinity")
+  nc_close(nc)
+  
+  lat_long_data <- data.frame(
+    longitude = as.vector(lon),
+    latitude = as.vector(lat),
+    depth = as.vector(depth), 
+    utc_time = as.vector(utc_time),
+    utc_date = as.vector(utc_date), 
+    temp = as.vector(temp), 
+    oxygen = as.vector(oxygen), 
+    salinity = as.vector(salinity)
+  )
+  
+  # convert time str
+  initial_time <- ymd_hms(initial_time_str, tz = "UTC")
+  end_time <- ymd_hms(end_time_str, tz = "UTC")
+  
+  # calculate utc time for DTC
+  time_in_seconds <- em_data$`Time (mins)` * 60
+  em_data <- em_data %>%
+    mutate(utc_time = initial_time + seconds(time_in_seconds)) %>%
+    mutate(utc_time = floor_date(utc_time, "second"))
+  
+  # convert and filter utc time
+  lat_long_data <- lat_long_data %>%
+    mutate(utc_time = dmy_hms(paste(utc_date, utc_time))) %>%
+    filter(utc_time < end_time) %>%
+    filter(utc_time > initial_time) %>%
+    mutate(utc_time = as_datetime(utc_time)) %>%
+    mutate(utc_time = floor_date(utc_time, "second"))
+  
+  # join data 
+  joined_data <- full_join(lat_long_data, em_data, by = "utc_time")
+  
+  # interpolate substrate and habitat
+  joined_data <- joined_data %>%
+    arrange(utc_time) %>%
+    fill(HabitatAggFauna, SG, OpCode, Depth, Canyon, Feature, TapeReader, Filename, .direction = "down")
+
+  
+  # additional processing for continuous tow 
+  if (var_name == "data_020_IN2024_V04_22_21&24_sub") {
+    joined_data$Depth <- as.numeric(joined_data$Depth)
+    
+    joined_data_a <- joined_data %>% slice(1:3949)
+    joined_data_b <- joined_data %>% slice(3950:6367)
+    
+    joined_data_a <- joined_data_a %>%
+      group_by(OpCode) %>%
+      mutate(OpCode = recode(OpCode, "IN2024_V04_22_21&24" = "IN2024_V04_22_21")) %>% 
+      group_by(Feature) %>% 
+      mutate(Feature = recode(Feature, "Slope/Thalweg" = "Canyon slope")) 
+    
+    joined_data_b <- joined_data_b %>%
+      group_by(OpCode) %>%
+      mutate(OpCode = recode(OpCode, "IN2024_V04_22_21&24" = "IN2024_V04_22_24")) %>% 
+      group_by(Feature) %>% 
+      mutate(Feature = recode(Feature, "Slope/Thalweg" = "Thalweg")) 
+    
+    joined_data <- bind_rows(joined_data_a, joined_data_b)
+    
+  }else {
+    return(joined_data)
+  }
+}
+# list files
+csv_files <- list.files(path = "path/to/csv/folder", pattern = "*.csv", full.names = TRUE)
+
+nc_files <- list.files(path = "path/to/NC/folder", pattern = "*.nc", full.names = TRUE)
+
+time_ranges <- read_csv("path/to/time_ranges.csv")
+
+all_tow_lines <- list()
+
+# run function 
+for (i in seq_along(csv_files)) {
+  csv_file <- csv_files[[i]]
+  nc_file <- nc_files[[i]]
+  initial_time_str <- time_ranges$initial_times[i]
+  end_time_str <- time_ranges$end_times[i]
+  var_name <- paste0("data_", tools::file_path_sans_ext(basename(csv_file)))
+  process_and_assign_data(csv_file, nc_file, initial_time_str, end_time_str, var_name)
+  
+  tow_line_data <- process_and_assign_data(csv_file, nc_file, initial_time_str, end_time_str, var_name)
+  
+  all_tow_lines[[var_name]] <- tow_line_data
+}
+
+# combine into a single dataframe
+DTC_data <- bind_rows(all_tow_lines)
+
+```
+
+## Plot of Solitary DTC tows
+
+```{r}
+# filter DTC_data to just Solitary 
+DTC_data_sol <- DTC_data %>% 
+  filter(Canyon == "Solitary")
+
+# create dataframe of OpCode for labelling on map 
+OpCodes_sol <-DTC_data_sol %>%
+  group_by(OpCode) %>%
+  slice(1)
+
+# import bathy data 
+nc_file <- "Solitary_Island_Canyon_High_Res_Bathy.nc"
+
+bathymetry <- rast(nc_file)
+
+bathymetry_sol_df <- as.data.frame(bathymetry, xy = TRUE)
+colnames(bathymetry_sol_df) <- c("longitude", "latitude", "depth")
+
+# overall map of Solitary canyon 
+ggplot() +
+  geom_raster(data = bathymetry_sol_df, aes(x = longitude, y = latitude, fill = depth)) +
+  scale_fill_viridis_c(option = "inferno", direction = 1) + # can replace with a nicer colour scheme (this is just a standard one used)
+  coord_fixed(xlim = c(153.5, 153.9), ylim = c(-30.17, -29.93)) +
+  geom_contour(data = bathymetry_sol_df, aes(x = longitude, y = latitude, z = depth), breaks = c(-200), colour = "black") + 
+  geom_contour(data = bathymetry_sol_df, aes(x = longitude, y = latitude, z = depth), breaks = c(-700), colour = "black") + 
+  geom_contour(data = bathymetry_sol_df, aes(x = longitude, y = latitude, z = depth), breaks = c(-1500), colour = "black") + 
+  geom_contour(data = bathymetry_sol_df, aes(x = longitude, y = latitude, z = depth), breaks = c(-2500), colour = "black") + 
+  geom_point(data = DTC_data_sol, aes(x = longitude, y = latitude), colour = "#96BBBB")  +
+  geom_text(data = OpCodes_sol, aes(x = longitude, y = latitude, label = OpCode), hjust = 0.5, vjust = 0, size = 3, colour = "black") +
+  theme_minimal()
+
+```
+
+## Plot of Richmond DTC tows
+
+```{r}
+# filter DTC_data to just Richmond
+DTC_data_rich <- DTC_data %>% 
+  filter(Canyon == "Richmond")
+
+# create dataframe of OpCode for labelling on map 
+OpCodes_rich <-DTC_data_rich %>%
+  group_by(OpCode) %>%
+  slice(1)
+
+# import bathy data 
+nc_file <- "RichmondCanyon_50m.nc"
+bathymetry_rich <- rast(nc_file)
+
+bathymetry_rich_df <- as.data.frame(bathymetry_rich, xy = TRUE)
+colnames(bathymetry_rich_df) <- c("longitude", "latitude", "depth")
+
+
+# overall map of Richmond canyon 
+ggplot() +
+  geom_raster(data = bathymetry_rich_df, aes(x = longitude, y = latitude, fill = depth)) +
+  scale_fill_viridis_c(option = "inferno", direction = 1) + # can replace with a nicer colour scheme (this is just a standard one used)
+  coord_fixed(xlim = c(153.86, 154.3), ylim = c(-28.6, -28.2))+
+  geom_contour(data = bathymetry_rich_df, aes(x = longitude, y = latitude, z = depth), breaks = c(-200), colour = "black") + 
+  geom_contour(data = bathymetry_rich_df, aes(x = longitude, y = latitude, z = depth), breaks = c(-700), colour = "black") + 
+  geom_contour(data = bathymetry_rich_df, aes(x = longitude, y = latitude, z = depth), breaks = c(-1500), colour = "black") + 
+  geom_contour(data = bathymetry_rich_df, aes(x = longitude, y = latitude, z = depth), breaks = c(-2500), colour = "black") + 
+  geom_point(data = DTC_data_rich, aes(x = longitude, y = latitude), colour = "#96BBBB")  +
+  geom_text(data = OpCodes_rich, aes(x = longitude, y = latitude, label = OpCode), hjust = 0.5, vjust = 0, size = 3, colour = "black") +
+  theme_minimal()
+```
+
+## Function for extracting bathy depth for DTC tow lines
+
+```{r}
+extract_depth_by_canyons <- function(DTC_data) {
+
+  DTC_data <- DTC_data[!is.na(DTC_data$longitude) & !is.na(DTC_data$latitude), ]
+  
+  all_data <- list()
+  
+  canyons <- unique(DTC_data$Canyon)
+  
+  for (canyon_name in canyons) {
+    canyon_data <- DTC_data[DTC_data$Canyon == canyon_name, ]
+
+    if (!inherits(canyon_data, "SpatialPointsDataFrame")) {
+      coordinates(canyon_data) <- ~longitude + latitude
+    }
+    
+    if (canyon_name == "Solitary") {
+      bathy <- raster("Solitary_Island_Canyon_High_Res_Bathy.nc")
+    } else if (canyon_name == "Richmond") {
+      bathy <- raster("RichmondCanyon_50m.nc")
+    } else {
+      stop("Invalid canyon name")
+    }
+    
+    canyon_data$Depth_Normal <- raster::extract(bathy, canyon_data)
+    canyon_data$Depth_Interpolated <- raster::extract(bathy, canyon_data, method = "bilinear")
+    
+    canyon_data_df <- as.data.frame(canyon_data)
+    
+    all_data[[canyon_name]] <- canyon_data_df
+  }
+  
+  combined_data <- do.call(rbind, all_data)
+  
+  return(combined_data)
+}
+
+DTC_data <- extract_depth_by_canyons(DTC_data)
+
+```
+
+## Plot of substrate and habitat across tow lines with bathy depth
+
+-   function to calculate distance from start
+-   plotting substrate and habitat as distance from start of tow
+
+```{r}
+# calculating distance
+calculate_distances <- function(data) {
+
+  opcodes <- unique(data$OpCode)
+  
+  results <- list()
+  
+  haversine_distance <- function(latitude1, longitude1, latitude2, longitude2) {
+    dist <- distHaversine(c(longitude1, latitude1), c(longitude2, latitude2))
+    return(dist / 1000)  # Convert meters to kilometers
+  }
+  
+  for (opcode in opcodes) {
+    filtered_data <- data %>%
+      filter(OpCode == opcode)
+    
+    start_point <- head(filtered_data[filtered_data$SG == 'NS', ], 1)
+    
+    if (nrow(start_point) > 0) {
+      start_lat <- start_point$latitude[1]
+      start_long <- start_point$longitude[1]
+      
+      filtered_data$distance_from_start <- mapply(haversine_distance, start_lat, start_long, filtered_data$latitude, filtered_data$longitude)
+      
+      results[[opcode]] <- filtered_data
+    } 
+  }
+  
+  final_result <- bind_rows(results)
+  
+  return(final_result)
+}
+
+DTC_data <- calculate_distances(DTC_data)
+
+# mapping one tow line 
+tow_line <- DTC_data %>% 
+  filter(OpCode == "IN2024_V04_03_19") # filter to whatever tow line you want
+
+# for habitat filter out no benthic habitat points - save separately for plotting
+tow_line_habitat <- tow_line %>%
+  filter(HabitatAggFauna != "No benthic habitat:" )
+
+ggplot(data = tow_line, aes(x = distance_from_start)) + 
+  geom_ribbon(aes(ymin = -Inf, ymax = Depth_Interpolated), fill = "#A39171", alpha = 0.5) + # can change to depth_normal or interpolated
+  geom_line(aes(y = Depth_Interpolated), color = "#A39171") + 
+  geom_line(aes(y = depth)) + 
+  geom_point(data = tow_line_habitat, aes(y = depth, colour = HabitatAggFauna)) + #geom_point(aes(y = depth, color = SG)) for substrate
+  theme_bw() + xlab("Distance from start of DTC") + ylab("Depth") 
+# if you want to plot for all tow lines at once use + facet_wrap(~OpCode, scales = "free"), rerun habitat filter for DTC_data and change the ggplot data to DTC_data
+
+```
+
+## Plot of temp and salinity across tow lines
+
+```{r}
+# filter to specific tow line 
+tow_line <- DTC_data %>% 
+  filter(OpCode == "IN2024_V04_02_16")
+
+# plot of temperature and salinity 
+ ggplot(data = tow_line, aes(x = distance_from_start)) + 
+  geom_ribbon(aes(ymin = -Inf, ymax = Depth_Interpolated), fill = "#A39171", alpha = 0.5) + 
+  geom_line(aes(y = Depth_Interpolated), color = "#A39171") + 
+  geom_line(aes(y = depth)) + 
+  geom_point(aes(y = depth, colour = temp)) + 
+  scale_color_gradient2(name = "Temperature", low = "blue", mid = "lightblue", high = "white", midpoint = mean(tow_line$temp, na.rm = TRUE)) +
+  new_scale_color() +
+  geom_point(aes(y = depth, colour = salinity), position = position_nudge(y = 20)) + 
+  scale_color_continuous(name = "Salinity") +
+  theme_bw() + 
+  xlab("Distance from start of DTC") + 
+  ylab("Depth")
+```
+
+## 3D plot of temp and salinity for 3 tows at solitary
+
+```{r}
+# filter to the three tows (doing this separately so that i can nudge them differently on the plot)
+tow_line1 <- DTC_data %>% 
+  filter(OpCode == "IN2024_V04_04_15")
+
+tow_line2 <- DTC_data %>% 
+  filter(OpCode == "IN2024_V04_02_16" | OpCode == "IN2024_V04_01_17")
+
+# import and format bathy data to dataframe
+nc_file <- "Solitary_Island_Canyon_High_Res_Bathy.nc"
+
+bathymetry <- rast(nc_file)
+
+bathymetry_sol_df <- as.data.frame(bathymetry, xy = TRUE)
+
+colnames(bathymetry_sol_df) <- c("longitude", "latitude", "depth")
+
+plot <-  ggplot() +
+  geom_raster(data = bathymetry_sol_df, aes(x = longitude, y = latitude, fill = depth)) +
+  scale_fill_viridis_c(option = "inferno", direction = 1) +
+  coord_fixed(xlim = c(153.59, 153.8), ylim = c(-30.17, -30.0)) +
+  geom_contour(data = bathymetry_sol_df, aes(x = longitude, y = latitude, z = depth), bins = 50, color = "grey", linewidth = 0.1) +
+  geom_point(data = tow_line1, aes(x = longitude, y = latitude, colour = temp), size = 0.3) + 
+  geom_point(data = tow_line2, aes(x = longitude, y = latitude, colour = temp), size = 0.3) + 
+  scale_color_gradient2(name = "Temperature", low = "blue", mid = "lightblue", high = "white", midpoint = mean(tow_line2$temp, na.rm = TRUE)) + 
+  new_scale_color() + 
+  geom_point(data = tow_line1, aes(x = longitude, y = latitude, colour = salinity), size = 0.3, position = position_nudge(y = 0.006, x = 0.0006)) + 
+   geom_point(data = tow_line2, aes(x = longitude, y = latitude, colour = salinity), size = 0.3, position = position_nudge(x = 0.006)) +
+  scale_color_viridis_c(name = "Salinity") +
+  theme(legend.position = "none") # removing the legend because it plots weirdly (can be joined together as images after)
+
+
+# 3D plot
+plot_gg(plot, 
+        width = 5,
+        height = 5,
+        scale = 300, 
+        windowsize = c(800, 800),
+        zoom = 0.75, 
+        phi = 15)
+
+render_snapshot("3D_plot.png")
+
+```
