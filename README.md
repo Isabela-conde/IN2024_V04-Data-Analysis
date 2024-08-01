@@ -7,7 +7,7 @@ Feel free to add more folders and update the READMEs as you go.
 
 
 ## Operations in Solitary Canyon 
-
+Code to run these plots in interp_ctd.ipynb
 - may need to be updated
   ![ops_solitary](https://github.com/Isabela-conde/IN2024_V04-Data-Analysis/assets/160552485/2b62d19e-1ca4-4461-ad80-d6f185849b42)
 
