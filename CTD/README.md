@@ -1,11 +1,9 @@
-# CTD: current projects
-
 ## Plotting CTD transects across the the canyon
 
 Plotting CTD transects across the canyon
 
 
-## Microrider Data
+# Microrider Data
 
 #### Some Papers suggested
 Using micorider to look at the mixing coefficients chi and epsilon and see how they change with time and how this effects isotherms.
